@@ -42,8 +42,52 @@ def mu(d_l):
 	distance modulus for D_L in MPC, equation (2)
 	'''
 
-	return 25.0 + (5.0 * np.log10(d_l))
+	return 25.0 + 5.0 * np.log10(d_l)
 
+
+# def eta(a, omega_m):
+
+# 	'''
+# 	fitting function eta, equation (3)
+# 	'''
+
+# 	scubed = (1.0 - omega_m) /  omega_m
+
+# 	s = scubed ** (1.0/3.0)
+
+# 	x = 1.0 / (a*a*a*a) 
+# 	x -= 0.1540 * s / (a*a*a)
+# 	x += 0.4304 * s * s / (a*a)
+# 	x += 0.19097 * s * s * s / (a)
+# 	x += 0.0066941 * s * s * s * s
+
+# 	x = x**(-1.0/8.0)
+
+# 	x *= 2.0 * np.sqrt(scubed + 1.0)
+
+# 	return x
+
+
+def d_l_fit(z, omega_m, H0):
+
+	'''
+	fitting function, uses eta
+
+	For a flat Universe, we can use an accurate fitting formula, 
+	given by U.-L. Pen, ApJS, 120:4950, 1999
+
+	z is redshift
+	omega_m is omega matter
+	H0 is hubble constant in km/s/Mpc
+	'''
+
+	a1 = 1.0 / (1.0 + z)
+
+	d = eta(1, omega_m) - eta(a1, omega_m)
+
+	d *= (1.0 + z) * C / H0 / 1e5		# 1e5 converts to cm/s
+
+	return d
 
 def eta(a, omega_m):
 
@@ -55,11 +99,11 @@ def eta(a, omega_m):
 
 	s = scubed ** (1.0/3.0)
 
-	x = 1.0 / (a**4) 
-	x -= 0.1540 * s / (a**3)
+	x = 1.0 / (a*a*a*a) 
+	x -= 0.1540 * s / (a*a*a)
 	x += 0.4304 * s * s / (a*a)
-	x += 0.19097 * scubed / (a)
-	x += 0.0066941 * scubed * s
+	x += 0.19097 * s * s * s / (a)
+	x += 0.066941 * s * s * s * s
 
 	x = x**(-1.0/8.0)
 
@@ -67,26 +111,6 @@ def eta(a, omega_m):
 
 	return x
 
-
-def d_l_fit(z, omega_m, H0):
-
-	'''
-	fitting function eta, equation (3)
-
-	For a flat Universe, we can use an accurate fitting formula, 
-	given by U.-L. Pen, ApJS, 120:4950, 1999
-
-	z is redshift
-	omega_m is omega matter
-	'''
-
-	a1 = 1.0 / (1.0 + z)
-
-	d = eta(1, omega_m) - eta(a1, omega_m)
-
-	d *= (1.0 + z) * C / H0 / 1e5
-
-	return d
 
 
 def read_SN(fname="SN.txt"):

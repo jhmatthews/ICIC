@@ -3,7 +3,6 @@ import pylab as p
 import numpy as np 
 import math 
 import scipy 
-from mcmc_sub import *
 
 
 def step(x):
@@ -55,20 +54,39 @@ def do_mc(xstart, NSAMPLES, sigma):
 	return xs, ps
 
 
-def likelihood_chi2(mu_i, mu_th, sigma_i):
+def do_q1_sampling():
+	NSAMPLES = 10000
 
-	num = ( mu_i - mu_th) ** 2
-	denom = sigma_i ** 2
+	xs, ps = do_mc(1.0, NSAMPLES, 1.0)
 
-	l = -0.5 * np.sum ( num / denom)
+	p.subplot(411)
+	x = np.arange(-2,2,0.01)
+	p.plot(x, prob(x))
+	p.xlim(-1,2)
 
-	return l
+	p.subplot(412)
+	p.scatter(xs, ps)
+	p.xlim(-1,2)
+
+	p.subplot(413)
+	p.scatter(np.arange(NSAMPLES), xs)
+
+	p.subplot(414)
+	p.hist(xs, normed = True, bins = 40)
+	p.xlim(-1,2)
+	p.show()
+
+	return 0
 
 
 
-z, mu, sigma = read_SN()	# read data
+def do_q2_sampling():
+	NSAMPLES = 10000
 
+	u = -1.0 + (2.0 * np.random.random(N))
+	v = np.random.normal(0.0, 1.0)
 
+	p.hist2d(u, v)
 
 
 
