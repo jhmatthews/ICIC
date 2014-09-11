@@ -5,7 +5,7 @@ import math
 import scipy 
 import mcmc_sub as sub
 import mpi_sub
-import time, sys
+import time, sys, os
 from mpi4py import MPI
 
 def log_normal_gaussian(x, mu, sigma):
@@ -277,7 +277,7 @@ nproc = MPI.COMM_WORLD.Get_size()   	# number of processes
 my_rank = MPI.COMM_WORLD.Get_rank()   	# The number/rank of this process
 my_node = MPI.Get_processor_name()    	# Node where this MPI process runs
 
-NWALKERS = nproc						# number of walkers in total - can make it more than one per thread
+NWALKERS = 4*nproc						# number of walkers in total - can make it more than one per thread
 nsamples = int(sys.argv[1])				# total number of samples PER WALKER
 NSAMPLES = nsamples * NWALKERS 			# total number of samples across all walkers/threads
 
@@ -305,7 +305,7 @@ thread_ps = np.empty((0))
 for i in range( my_nmin, my_nmax):
 
 	# get start points as gaussian centred on something sensible
-	starts = np.array([np.random.normal(0.45, 0.1), np.random.normal(0.9, 0.1), np.random.normal(0.6, 0.05)])
+	starts = np.array([np.random.normal(0.5, 0.1), np.random.normal(1.1, 0.1), np.random.normal(0.63, 0.05)])
 
 	# sigmas for my proposal functions
 	sigmas = [0.01, 0.01, 0.01]
@@ -352,8 +352,8 @@ if my_rank == 0:
 	make_plot(params, ps, "posterior_NSAMPLES%i.png" % NSAMPLES, \
          labels=["$\Omega_M$", "$\Omega_V$", "$h$"],\
          lims=[(0.3,0.7), (0.7,1.5), (0.6,0.7)],\
-         twodhist=p.hist2d)
-
+         twodhist=p.scatter)
+	os.system("cp posterior_NSAMPLES%i.png ~/DRopbox/latest.png")
 
 # finish off
 Log("Total Time Elapsed %.2fs" % (time.time() - t0))
