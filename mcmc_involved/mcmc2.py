@@ -4,25 +4,19 @@ import numpy as np
 import math 
 import scipy 
 import mcmc_sub as sub
+import time
+
+def log_normal_gaussian(x, mu, sigma):
+
+	num = (x - mu) ** 2 
+	denom = sigma**2
+	y = -0.5 * num / denom
+
+	return np.log(1.0 / np.sqrt(2.0 * np.pi) / sigma) + y
 
 
-def step(x):
 
-	return (x > 0.0)
-
-def prob(x):
-
-	mean = 0.3
-	sigma = 0.1
-
-	exp_term = -0.5 * ( ( x - mean) / sigma ) ** 2 
-	x1 = np.exp(exp_term) 
-	x2 = step(x) * np.exp(- x / 0.2 )
-	x3 = step(x - 0.8) * step(0.9 - x)
-
-	return x1 + x2 + x3
-
-def do_general_mc (start_params, NSAMPLES, data, f_likelihood, sigmas, param_limits=None):
+def do_general_mc (start_params, NSAMPLES, data, f_likelihood, sigmas, prior = None, param_limits=None, return_accept=False):
 
 	'''
 	Do the MCMC chain in 2-d parameter space. 
@@ -39,9 +33,13 @@ def do_general_mc (start_params, NSAMPLES, data, f_likelihood, sigmas, param_lim
 		f_likelihood		function
 							likelihood function
 
-		proposal_cov		array-like
-							covariance matrix for your proposal distribution
-							shape 	
+		sigmas				array-like
+							sigmas for your proposal distribution
+							 	
+
+		prior 				function or NoneType
+							if none use uniform prior i.e. sample likelihood, not posterior
+							if function needs to take array of shape params as argument
 
 	Returns:
 		params 				array-like
@@ -54,6 +52,7 @@ def do_general_mc (start_params, NSAMPLES, data, f_likelihood, sigmas, param_lim
 	'''
 
 	nparams = len(start_params)
+	accept = 0
 
 	# create blank arrays- this is where we store our walk
 	params = np.zeros( (nparams, NSAMPLES) )
@@ -63,17 +62,26 @@ def do_general_mc (start_params, NSAMPLES, data, f_likelihood, sigmas, param_lim
 	params[:,0] = start_params
 	ps[0] = f_likelihood(start_params, data)
 
+	if prior != None:
+		ps[0] += prior(start_params)
+
+	t0 = time.time()
+
 	for i in range(1,NSAMPLES):
+
 
 		# generate trial points from our proposal distribution
 		# change this
 		trial_params = np.zeros(nparams)
+
 		for j in range(nparams):
 			trial_params[j] = np.random.normal(params[:,i-1][j], sigmas[j])
 
 
 		# calculate likelihood of proposed point
 		ptrial = f_likelihood(trial_params, data)
+		if prior != None:
+			ptrial += prior(trial_params)
 
 		# random number for test below
 		z = np.random.random()
@@ -85,69 +93,30 @@ def do_general_mc (start_params, NSAMPLES, data, f_likelihood, sigmas, param_lim
 			#accept
 			params[:,i] = trial_params
 			ps[i] = ptrial
+			accept += 1
 
 		else:
 			#copy 
 			params[:,i] = params[:,i-1]
 			ps[i] = ps[i - 1]
 
-	return params, ps
+	ps = np.e ** ps
+
+	tnew = time.time()
+	print tnew - t0
+
+	if return_accept:
+		return params, ps, np.float(accept) / NSAMPLES
+	else:
+		return params, ps
 
 
-
-
-def do_mc(omega_start, h_start, NSAMPLES, sigma, data):
+def make_plot(params, ps, fname, labels, lims, nbins = 100):
 
 	'''
-	Do the MCMC chain in 2-d parameter space. 
-	Start at omega_start and h_start
+	make a triangular shaped plot, with 2D probability
+	distributions flanked by histograms 
 	'''
-
-	# create blank arrays- this is where we store our walk
-	omegas = np.zeros(NSAMPLES)
-	hs = np.zeros(NSAMPLES)
-	ps = np.zeros(NSAMPLES)
-
-	# set starting values and evaluate the likelihood
-	omegas[0] = omega_start
-	hs[0] = h_start
-	params = [omegas[0], hs[0]]
-	ps[0] = log_likelihood_chi2(params, data)
-
-	for i in range(1,NSAMPLES):
-
-		# generate trial points from our proposal distribution
-		# change this
-		omega_trial = np.random.normal(omegas[i-1], sigma)
-		h_trial = np.random.normal(hs[i-1], sigma)
-
-		# calculate likelihood of proposed point
-		params = [omega_trial, h_trial]
-		ptrial = log_likelihood_chi2(params, data)
-
-		# random number for test below
-		z = np.random.random()
-
-		# we use logs here to avoid numerical error
-		test = np.exp(ptrial - ps[i-1])
-
-		if z < test:
-			#accept
-			omegas[i] = omega_trial
-			hs[i] = h_trial
-			ps[i] = ptrial
-
-		else:
-			#copy 
-			omegas[i] = omegas[i - 1]
-			hs[i] = hs[i - 1]
-			ps[i] = ps[i - 1]
-
-		#print omegas[i], hs[i], ps[i], test
-
-	return omegas, hs, ps
-
-def make_plot(params, ps, nbins = 100):
 
 	nparams = len(params)
 
@@ -161,20 +130,53 @@ def make_plot(params, ps, nbins = 100):
 
 		n2d = i
 
+		p.xlabel(labels[i])
+		p.xlim(lims[i])
+
 		for j in range(n2d):
 
 			i_2d = i_hist - n2d + j
 
-			print i_2d
+			ix = j
+			iy = i
 
 			p.subplot(nparams, nparams, i_2d)
-			p.scatter(params[i-1], params[i], c=ps)
+			p.scatter(params[ix], params[iy], c=ps, edgecolors="None")
 
-	p.show()
+			p.xlim(lims[ix])
+			p.ylim(lims[iy])
 
+			p.xlabel(labels[ix])
+			p.ylabel(labels[iy])
 
+			print "subplot:", nparams, nparams, i_2d 
+			print "x:", labels[ix], "y:", labels[iy]  
+
+	p.savefig(fname)
+	p.clf()
+
+def h_prior(params):
+
+	h_mu = 0.738
+	h_sigma = 0.024 
+	weight = log_normal_gaussian(params[1], h_mu, h_sigma)
+
+	return weight
+
+def h_prior_narrow(params):
+
+	h_mu = 0.738
+	h_sigma = 0.0024 
+	weight = log_normal_gaussian(params[1], h_mu, h_sigma)
+
+	return weight
 
 def log_likelihood_chi2(params, data):
+
+	'''
+	return the log likelihood for the omega_matter
+	and little h 
+	'''
 
 	z = data[0]
 	mu = data[1]
@@ -183,6 +185,8 @@ def log_likelihood_chi2(params, data):
 	omega = params[0]
 	h = params[1]
 
+	# this condition needed because proposal distribution 
+	# can try to sample outside allowed param space
 	if omega < 0.0 or h < 0.0 or h > 1.0 or omega > 1.0:
 		return 0.0 
 
@@ -197,6 +201,56 @@ def log_likelihood_chi2(params, data):
 
 	return l
 
+def log_likelihood_chi2_nonflat(params, data):
+
+	'''
+	return the log likelihood for the omega_matter
+	and little h 
+	'''
+
+	z = data[0]
+	mu = data[1]
+	sigma = data[2]
+
+	omega_m = params[0]
+	omega_v = params[1]
+	h = params[2]
+
+	# this condition needed because proposal distribution 
+	# can try to sample outside allowed param space
+	if h < 0.0 or h > 1.0:
+		return 0.0 
+
+	dl = sub.dl_nonflat(z, h*100.0, omega_m, omega_v)
+
+	mu_th = sub.mu(dl)
+
+	num = ( mu - mu_th) ** 2
+	denom = sigma ** 2
+
+	l = -0.5 * np.sum ( num / denom) 
+
+	return l
+
+def p_accept_curve(svals = np.arange(-5,0.5,0.1)):
+
+	p_accept = np.zeros(len(svals))
+	
+	for i in range(len(svals)):
+
+		s = 10.0 ** svals[i]
+		sigmas = [s,s]
+		params, ps, p_accept[i] = do_general_mc (starts, NSAMPLES, data, log_likelihood_chi2, sigmas, prior=h_prior_narrow, return_accept=True)
+		print s, p_accept[i]
+
+	p.plot(svals, p_accept)
+	p.xlabel(r"$\sigma_{{\rm Proposal}}$")
+	p.ylabel("$P_{accept}$")
+
+	p.savefig("paccept.png")
+	p.clf()
+
+	return 0
 
 
 data = sub.read_SN()	# read data, len 3 array
@@ -205,33 +259,26 @@ omega_start = 0.5
 h_start = 0.5
 NSAMPLES = 10000
 sigmas = [0.01,0.01]
-proposal_cov = np.ndarray((2,2))
-proposal_cov[:] = 0.1
-print proposal_cov
 starts = np.array([omega_start, h_start])
 
-params, ps = do_general_mc (starts, NSAMPLES, data, log_likelihood_chi2, sigmas)
-#o, h, ps = do_mc(0.5, 0.5, 10000, 0.01, data)
+# do first MC and plot up
+# params, ps = do_general_mc (starts, NSAMPLES, data, log_likelihood_chi2, sigmas)
+# make_plot(params, ps, "posterior1.png", labels=["$\Omega_m$", "$h$"], lims=[(0.2,0.45), (0.6,0.7)])
 
-#p.subplot(221)
-# p.scatter(params[0], params[1], c=np.e**ps)
-# #p.scatter(o, h, c=ps)
-# #p.hist2d(o,h, bins=100)
+# # do MC with prior and plot up
+# params, ps = do_general_mc (starts, NSAMPLES, data, log_likelihood_chi2, sigmas, prior=h_prior)
+# make_plot(params, ps, "posterior2_withprior.png", labels=["$\Omega_m$", "$h$"], lims=[(0.2,0.45), (0.6,0.7)])
 
-# #p.subplot(222)
-# #p.hist(omegas)
-# p.show()
-make_plot(params, np.e**ps)
+# # do MC with narrow prior and plot up
+# params, ps = do_general_mc (starts, NSAMPLES, data, log_likelihood_chi2, sigmas, prior=h_prior_narrow)
+# make_plot(params, ps, "posterior3_withnarrowprior.png", labels=["$\Omega_m$", "$h$"], lims=[(0,1), (0,1)])
 
-# zth = np.arange(0,2,0.01)
-# dl = sub.d_l_fit(zth, 0.24, 0.71*100.0)
-# dl2 = sub.d_l_fit(zth, 0.45, 0.63*100.0)
-# mu_th = sub.mu(dl)
-# mu2 = sub.mu(dl2)
 
-# p.scatter(data[0], data[1])
-# p.plot(zth, mu_th)
-# p.plot(zth, mu2)
-# p.show()
+# p_accept_curve()
+# do first MC and plot up
+starts = np.array([0.45, 0.9, 0.65])
+sigmas = [0.01, 0.01, 0.01]
+params, ps = do_general_mc (starts, 10000, data, log_likelihood_chi2_nonflat, sigmas)
+make_plot(params, ps, "posterior1.png", labels=["$\Omega_M$", "$\Omega_V$", "$h$"], lims=[(0.,1), (0.,1), (0.6,0.66)])
 
 

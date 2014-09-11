@@ -27,10 +27,10 @@ import logging
 import warnings
 from numpy import exp
 import pylab as p
-from pylab import *
 from astropy import units
 from constants import *
 from read_output import setpars
+from scipy import integrate
 setpars()
 
 H0_70 = 70.0 # km /s / MPC
@@ -43,29 +43,6 @@ def mu(d_l):
 	'''
 
 	return 25.0 + 5.0 * np.log10(d_l)
-
-
-# def eta(a, omega_m):
-
-# 	'''
-# 	fitting function eta, equation (3)
-# 	'''
-
-# 	scubed = (1.0 - omega_m) /  omega_m
-
-# 	s = scubed ** (1.0/3.0)
-
-# 	x = 1.0 / (a*a*a*a) 
-# 	x -= 0.1540 * s / (a*a*a)
-# 	x += 0.4304 * s * s / (a*a)
-# 	x += 0.19097 * s * s * s / (a)
-# 	x += 0.0066941 * s * s * s * s
-
-# 	x = x**(-1.0/8.0)
-
-# 	x *= 2.0 * np.sqrt(scubed + 1.0)
-
-# 	return x
 
 
 def d_l_fit(z, omega_m, H0):
@@ -130,82 +107,88 @@ def read_SN(fname="SN.txt"):
 
 
 
+def rintegral(z, omega_m, omega_v):
 
-def question1():
+	'''
+	integrate to find r(z)
+	this is used to calculate transverse comoving distance
+	'''
 
-	omegas = np.arange(0.2,0.6,0.1)
+	omega = omega_m + omega_v
+	integral = integrate.quad(rintegrand, 0.0, z, args=(omega_m, omega_v))
 
-	zs = np.arange(0,2,0.001)
+	integral = integral[0]
 
-	for o in omegas:
+	if omega != 1:
+		integral *= np.sqrt( np.fabs(1.0 - omega))
 
-		distances = d_l_fit(zs, o, H0_70)
-
-		p.plot(zs, mu(distances), label="$\Omega_m=%.1f$" % o)
-
-	p.legend(loc=4)
-	p.xlabel("$z$")
-	p.ylabel("$\mu$")
-	p.savefig("question1.png")
-
-
-
-def question2():
-
-	z, mu, sigma = read_SN()
-
-	p.errorbar(z, mu, yerr=sigma, fmt='.')
-	p.xlabel("$z$")
-	p.ylabel("$\mu$")
-	p.savefig("question2.png")
-
-
-def get_random_sn(omega_m = 0.3, rms = 0.1, n = 20):
-
-	zs = 2.0*np.random.rand(n) 
-
-	mu_gauss = 0.1 * np.random.randn(n)
-
-	ds = d_l_fit(zs, omega_m, H0_70)
-
-	mus = mu(ds)
-
-	mus += mu_gauss
-
-	return zs, mus
-
-def question4():
-
-	z, mu = get_random_sn()
-
-	p.scatter(z,mu)
-
-	p.savefig("question4.png")
-
-	return z, mu
-
-def question5(z, mu):
-
-	p.hist(z)
-
-	savefig("question5.png")
-
-def do():
-	clf()
-	question1()
-	question2()
-
-	z, mu = question4()
-
-	p.clf()
-
-	question5(z, mu)
-
-	return 0
+	return integral
 
 
 
+def rintegrand(z, omega_m, omega_v):
 
+	'''
+	The integrand 
+	'''
+
+	omega = omega_m + omega_v
+
+	sqterm = omega_m * (1.0 + z)**3
+	sqterm += omega_v
+	sqterm += (1. - omega) * (1.0 + z) * (1.0 + z)
+
+	denom = np.sqrt(sqterm)
+	integrand = 1.0 / denom 
+
+	return integrand
+
+
+def S_k(r, omega):
+
+	'''
+	transverse distance from cosmology
+	'''
+
+	if omega > 1:
+		return np.sin(r)
+	elif omega < 1:
+		return np.sinh(r)
+	elif omega == 1:
+		return r
+	else:
+		print "Don't understand omega"
+		sys.exit(0)
+
+
+def dl_nonflat(z, H0, omega_m, omega_v):
+
+	'''
+	Calculate dl in Mpc in a non flat universe 
+	calculate dls for array of zs, for 
+	constant H0, omega_m and omega_v
+	'''
+
+	omega = omega_m + omega_v
+
+	dl = np.zeros(len(z))
+
+	for i in range(len(z)):
+
+		d = (1.0 + z[i]) * C / H0 / 1e5
+
+		if omega != 1:
+			d /= np.sqrt(np.fabs(1. - omega))
+
+		r = rintegral(z[i], omega_m, omega_v)	
+
+		s = S_k (r, omega)
+
+		d *= s
+
+		dl[i] = d 
+
+	return dl
 
 
 
