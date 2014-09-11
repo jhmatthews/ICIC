@@ -148,7 +148,9 @@ def make_plot(params, ps, fname, labels, lims, twodhist=p.scatter, nbins = 100):
 		n2d = i
 
 		p.xlabel(labels[i])
-		p.xlim(lims[i])
+
+		if twodhist != p.hist2d:
+			p.xlim(lims[i])
 
 		for j in range(n2d):
 
@@ -163,8 +165,9 @@ def make_plot(params, ps, fname, labels, lims, twodhist=p.scatter, nbins = 100):
 			else:
 				twodhist(params[ix], params[iy], c=ps, edgecolors="None")
 
-			p.xlim(lims[ix])
-			p.ylim(lims[iy])
+			if twodhist != p.hist2d:
+				p.xlim(lims[ix])
+				p.ylim(lims[iy])
 
 			p.xlabel(labels[ix])
 			p.ylabel(labels[iy])
@@ -269,6 +272,8 @@ def p_accept_curve(svals = np.arange(-5,0.5,0.1)):
 
 	return 0
 
+
+
 # start a timer
 t0 = time.time()
 
@@ -277,7 +282,8 @@ nproc = MPI.COMM_WORLD.Get_size()   	# number of processes
 my_rank = MPI.COMM_WORLD.Get_rank()   	# The number/rank of this process
 my_node = MPI.Get_processor_name()    	# Node where this MPI process runs
 
-NWALKERS = 4*nproc						# number of walkers in total - can make it more than one per thread
+nw_per_thread = 1 						# number of walkers per thread
+NWALKERS = nw_per_thread*nproc			# number of walkers in total - can make it more than one per thread
 nsamples = int(sys.argv[1])				# total number of samples PER WALKER
 NSAMPLES = nsamples * NWALKERS 			# total number of samples across all walkers/threads
 
@@ -352,8 +358,8 @@ if my_rank == 0:
 	make_plot(params, ps, "posterior_NSAMPLES%i.png" % NSAMPLES, \
          labels=["$\Omega_M$", "$\Omega_V$", "$h$"],\
          lims=[(0.3,0.7), (0.7,1.5), (0.6,0.7)],\
-         twodhist=p.scatter)
-	os.system("cp posterior_NSAMPLES%i.png ~/DRopbox/latest.png")
+         twodhist=p.hist2d)
+	os.system("cp posterior_NSAMPLES%i.png ~/Dropbox/latest.png" % NSAMPLES)
 
 # finish off
 Log("Total Time Elapsed %.2fs" % (time.time() - t0))
